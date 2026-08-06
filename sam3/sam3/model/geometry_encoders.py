@@ -45,19 +45,12 @@ def concat_padded_sequences(seq1, mask1, seq2, mask2, return_index: bool = False
     assert seq2_length == mask2.size(1)
 
     if seq2_length == 0:
-        # Degenerate case (e.g. no geometric prompt tokens): concatenation is a no-op.
-        # Skip the index_put/scatter path below -- with an empty seq2, the resulting
-        # full-range slice assignment degenerates in a way that crashes ONNX export's
-        # shape inference (SIGFPE) even though it's a correct no-op in eager mode.
         if return_index:
             index = torch.zeros((0, batch_size), dtype=torch.long, device=seq2.device)
             return seq1, mask1, index
         return seq1, mask1
 
     if seq1_length == 0:
-        # Symmetric degenerate case (e.g. cls token concatenated onto an empty
-        # geometric-prompt sequence): seq1 contributes nothing, so the result is
-        # just seq2/mask2 unshifted. Same ONNX-export SIGFPE avoidance as above.
         if return_index:
             index = torch.arange(seq2_length, device=seq2.device)[:, None].expand(-1, batch_size)
             return seq2, mask2, index
@@ -855,16 +848,11 @@ class SequenceGeometryEncoder(nn.Module):
             final_embeds = self.norm(self.final_proj(final_embeds))
 
         if self.encode is not None:
-            # Skip passing an all-False padding mask: nn.MultiheadAttention fills masked
-            # positions with a huge negative sentinel (~-3.4e38) that overflows/clips
-            # under ONNX export FP16 (TensorRT clips it to -65504), which then produces
-            # NaN through softmax when there is nothing genuinely padded to mask out.
-            encode_key_padding_mask = None if not final_mask.any() else final_mask
             for lay in self.encode:
                 final_embeds = activation_ckpt_wrapper(lay)(
                     tgt=final_embeds,
                     memory=seq_first_img_feats,
-                    tgt_key_padding_mask=encode_key_padding_mask,
+                    tgt_key_padding_mask=final_mask,
                     pos=seq_first_img_pos_embeds,
                     act_ckpt_enable=self.training and self.use_act_ckpt,
                 )

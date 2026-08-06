@@ -305,10 +305,6 @@ class LearnablePositionalEmbedding(nn.Module):
     def forward(self, seq_len: int, *args, **kwargs) -> torch.Tensor:
         pos_embed = self.pos_embed
         if self.padding_idx is not None and self.training:
-            # Re-zeroing is only needed to counter optimizer drift during training;
-            # already zeroed once in reset_parameters() and unused at inference.
-            # Skipped in eval mode: this scalar-at-fixed-index assignment traces to
-            # an ONNX index_put/reshape node that crashes the exporter (SIGFPE).
             with torch.no_grad():
                 pos_embed[:, :, self.padding_idx, ...] = 0.0
 

@@ -3,28 +3,11 @@
 Export an EfficientSAM3 image model to ONNX (and optionally a TensorRT engine)
 for a fixed set of text classes, baked into the graph as constants.
 
-This "specializes" the open-vocabulary model into a closed-set detector: text
-embeddings for each class are computed once at export time and stored as model
-buffers, so the exported graph takes only `pixel_values` as input and returns
-one row per query with the pixel-space box, confidence, and class id already
-resolved -- no separate text encoder call needed at inference time.
-
 Usage:
     python3 export_onnx_tensorrt.py --checkpoint path/to/efficientsam3_efficientvit.pt \\
         --backbone-type efficientvit --model-name b1 \\
         --text-encoder-type MobileCLIP-S0 --text-encoder-context-length 16 \\
         --classes person car bus --device cuda --build-engine
-
-Notes on precision (see README section this script's PR adds, or the PR
-description): building the TensorRT engine with a blanket `--fp16` overflows
-FP16's ~65504 range inside the EfficientViT backbone's `context_module`
-(ReLU linear attention has no softmax normalization bounding its dot-product
-sums before the final division, unlike SAM3's softmax attention). This script
-builds a mixed-precision engine instead: FP16 everywhere except layers whose
-name contains "context_module", which are pinned to FP32. This was confirmed
-correct via `polygraphy run --onnxrt --trt --validate` bisection against the
-ONNX Runtime FP32 reference on a real image, and is roughly as fast as full
-FP16 since only ~1% of layers are affected.
 """
 
 import os
@@ -136,8 +119,7 @@ class EfficientSam3SpecializedWrapper(nn.Module):
 def build_mixed_precision_engine(onnx_path, engine_path, imgsz, min_batch, opt_batch, max_batch,
                                   input_name='pixel_values', workspace_gb=8,
                                   force_fp32_match='context_module'):
-    """FP16 engine with FP32 pinned for `context_module` (EfficientViT's linear
-    attention) layers, which overflow FP16 range otherwise -- see module docstring."""
+    """FP16 engine with FP32 pinned for `context_module` layers (overflow FP16 otherwise)."""
     import tensorrt as trt
 
     logger = trt.Logger(trt.Logger.WARNING)
