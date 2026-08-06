@@ -106,7 +106,7 @@ class EfficientSam3SpecializedWrapper(nn.Module):
             det_chunks.append(torch.cat([boxes, scores.unsqueeze(-1), cls_col], dim=-1))
 
             if self.with_mask:
-                m = interpolate(outputs['pred_masks'], (IMGSZ, IMGSZ),
+                m = interpolate(outputs['pred_masks'], pixel_values.shape[-2:],
                                  mode='bilinear', align_corners=False).sigmoid()
                 mask_chunks.append(m)
 
@@ -125,7 +125,7 @@ def build_mixed_precision_engine(onnx_path, engine_path, imgsz, min_batch, opt_b
     logger = trt.Logger(trt.Logger.WARNING)
     trt.init_libnvinfer_plugins(logger, '')
     builder = trt.Builder(logger)
-    network = builder.create_network()
+    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
     parser = trt.OnnxParser(network, logger)
 
     print(f'[Parse] {onnx_path} ...')
