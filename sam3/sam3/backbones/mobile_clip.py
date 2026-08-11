@@ -304,7 +304,7 @@ class LearnablePositionalEmbedding(nn.Module):
 
     def forward(self, seq_len: int, *args, **kwargs) -> torch.Tensor:
         pos_embed = self.pos_embed
-        if self.padding_idx is not None:
+        if self.padding_idx is not None and not torch.onnx.is_in_onnx_export():
             with torch.no_grad():
                 pos_embed[:, :, self.padding_idx, ...] = 0.0
 

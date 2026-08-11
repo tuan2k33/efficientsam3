@@ -44,6 +44,18 @@ def concat_padded_sequences(seq1, mask1, seq2, mask2, return_index: bool = False
     assert seq1_length == mask1.size(1)
     assert seq2_length == mask2.size(1)
 
+    if seq2_length == 0:
+        if return_index:
+            index = torch.zeros((0, batch_size), dtype=torch.long, device=seq2.device)
+            return seq1, mask1, index
+        return seq1, mask1
+
+    if seq1_length == 0:
+        if return_index:
+            index = torch.arange(seq2_length, device=seq2.device)[:, None].expand(-1, batch_size)
+            return seq2, mask2, index
+        return seq2, mask2
+
     torch._assert_async(is_right_padded(mask1))
     torch._assert_async(is_right_padded(mask2))
 
@@ -606,7 +618,7 @@ class SequenceGeometryEncoder(nn.Module):
             assert points_embed is None
             points_embed = proj
 
-        if self.points_pool_project is not None:
+        if self.points_pool_project is not None and n_points > 0:
             # points are [Num_points, bs, 2], normalized in [0, 1]
             # the grid needs to be [Bs, H_out, W_out, 2] normalized in [-1,1]
             # Will take H_out = num_points, w_out = 1
@@ -649,7 +661,7 @@ class SequenceGeometryEncoder(nn.Module):
             assert boxes_embed is None
             boxes_embed = proj
 
-        if self.boxes_pool_project is not None:
+        if self.boxes_pool_project is not None and n_boxes > 0:
             H, W = img_feats.shape[-2:]
 
             # boxes are [Num_boxes, bs, 4], normalized in [0, 1]
