@@ -3,6 +3,18 @@
 Export an EfficientSAM3 image model to ONNX (and optionally a TensorRT engine)
 for a fixed set of text classes, baked into the graph as constants.
 
+The input resolution is fixed at IMGSZ (1008), matching the resolution the
+checkpoints are trained and evaluated at, and only the batch dimension is
+dynamic. It is deliberately not exposed as a flag:
+`_create_position_encoding(precompute_resolution=1008)` in model_builder
+prepopulates `PositionEmbeddingSine.cache` for the four 1008-derived feature
+map sizes (252/126/63/31), so `forward()` returns a cached constant that the
+tracer bakes into the graph. Exporting at another resolution therefore
+produces a graph whose positional encoding silently belongs to a different
+input size. Making the export resolution-agnostic needs that cache bypassed
+during tracing (and the compute path verified to trace to dynamic shape ops)
+-- out of scope here, tracked separately.
+
 Usage:
     python3 export_onnx_tensorrt.py --checkpoint path/to/efficientsam3_efficientvit.pt \\
         --backbone-type efficientvit --model-name b1 \\
@@ -193,10 +205,10 @@ def export_and_build(args):
 
     print(f'[Build] EfficientSam3SpecializedWrapper (with_mask={args.mask}) ...')
     wrapper = EfficientSam3SpecializedWrapper(
-        model, args.classes, device, imgsz=args.imgsz, with_mask=args.mask,
+        model, args.classes, device, imgsz=IMGSZ, with_mask=args.mask,
     ).to(device).eval()
 
-    dummy = torch.randn(1, 3, args.imgsz, args.imgsz, device=device)
+    dummy = torch.randn(1, 3, IMGSZ, IMGSZ, device=device)
     print('[Check] Sanity forward pass ...')
     with torch.no_grad():
         out = wrapper(dummy)
@@ -235,7 +247,7 @@ def export_and_build(args):
     if args.build_engine:
         engine_path = args.output.replace('.onnx', '.engine')
         build_mixed_precision_engine(
-            args.output, engine_path, args.imgsz,
+            args.output, engine_path, IMGSZ,
             args.min_batch, args.opt_batch, args.max_batch,
         )
 
@@ -248,7 +260,6 @@ def parse_args():
     p.add_argument('--model-name', default='b1')
     p.add_argument('--text-encoder-type', default='MobileCLIP-S0')
     p.add_argument('--text-encoder-context-length', type=int, default=16)
-    p.add_argument('--imgsz', type=int, default=IMGSZ)
     p.add_argument('--opset', type=int, default=17)
     p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     p.add_argument('--mask', action='store_true', help='also export instance masks')

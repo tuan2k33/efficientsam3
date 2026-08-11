@@ -11,6 +11,17 @@ graph 1, then feed both graph 1's output and the image into graph 2. Unlike
 the fixed-class "specialize" export, no text is baked in: any prompt can be
 tokenized and encoded at runtime.
 
+The input resolution is fixed at IMGSZ (1008), matching the resolution the
+checkpoints are trained and evaluated at. It is deliberately not exposed as a
+flag: `_create_position_encoding(precompute_resolution=1008)` in model_builder
+prepopulates `PositionEmbeddingSine.cache` for the four 1008-derived feature
+map sizes (252/126/63/31), so `forward()` returns a cached constant that the
+tracer bakes into the graph. Exporting at another resolution therefore
+produces a graph whose positional encoding silently belongs to a different
+input size. Making the export resolution-agnostic needs that cache bypassed
+during tracing (and the compute path verified to trace to dynamic shape ops)
+-- out of scope here, tracked separately.
+
 Usage:
     python3 export_onnx_open_vocab.py --checkpoint path/to/efficientsam3_efficientvit.pt \\
         --backbone-type efficientvit --model-name b1 \\
@@ -133,8 +144,8 @@ def export(args):
         )
     print(f'[Export] Saved: {text_onnx_path}')
 
-    vision_wrapper = VisionDecoderWrapper(model, imgsz=args.imgsz).to(device).eval()
-    dummy_pixels = torch.randn(1, 3, args.imgsz, args.imgsz, device=device)
+    vision_wrapper = VisionDecoderWrapper(model, imgsz=IMGSZ).to(device).eval()
+    dummy_pixels = torch.randn(1, 3, IMGSZ, IMGSZ, device=device)
 
     print('[Check] Vision+decoder sanity forward pass ...')
     with torch.no_grad():
@@ -168,7 +179,6 @@ def parse_args():
     p.add_argument('--model-name', default='b1')
     p.add_argument('--text-encoder-type', default='MobileCLIP-S0')
     p.add_argument('--text-encoder-context-length', type=int, default=16)
-    p.add_argument('--imgsz', type=int, default=IMGSZ)
     p.add_argument('--opset', type=int, default=17)
     p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     p.add_argument('--output-dir', default='onnx_open_vocab')
