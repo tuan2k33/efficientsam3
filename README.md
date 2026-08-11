@@ -194,7 +194,7 @@ For dataset setup and download scripts (`data/download_*.sh`) covering COCO, DAV
 - [x] **Release SAM3-LiteText Weights**: Distilled a lightweight MobileCLIP text encoder that is competitive to the SAM3 text encoder for efficient vision-language segmentation
 - [ ] **Release Stage 2 Memory Bank Aligned Model Weights**: Models with Perceiver-based memory compression trained on SA-V dataset
 - [x] **Release Stage 3 Fine-Tuned Model Weights**: End-to-end fine-tuned models on SAM3 dataset with full PCS capabilities
-- [ ] **ONNX/CoreML Export**: Export models to ONNX and CoreML formats for cross-platform deployment
+- [x] **ONNX/TensorRT Export**: Export models to ONNX for cross-platform deployment (TensorRT engine build supported) — contributed via [PR #49](https://github.com/SimonZeng7108/efficientsam3/pull/49) by [@tuan2k33](https://github.com/tuan2k33). CoreML export still pending.
 - [ ] **Web Demo**: Interactive web demonstration for real-time concept segmentation and tracking
 
 ---
